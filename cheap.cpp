@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <iterator>
 #include <vector>
+#include <chrono>
 
 struct Product final
 {
@@ -17,11 +18,12 @@ std::vector<Product> find_cheapest(const std::vector<Product>& v, size_t num)
 {
     if (v.size() <= 5){ return std::vector<Product>(v.begin(), v.end()); }
 
-    std::vector<Product> vec;
-    std::copy(v.begin(), v.end(), std::back_inserter(vec));
-    std::sort(vec.begin(), vec.end(),
+    std::vector<Product> vec(5, Product(0.0) );
+    std::partial_sort_copy(
+        v.begin(), v.end(),
+        vec.begin(), vec.end(),
         [](auto const& a, auto const& b){ return a < b; });
-    return std::vector<Product>(vec.begin(), vec.begin() + 5);
+    return vec;
 }
 
 TEST(Cheap, Test)
@@ -39,6 +41,32 @@ TEST(Cheap, Test)
     std::sort(std::begin(actual), std::end(actual));
 
     ASSERT_EQ(expected, actual);
+}
+
+TEST(Cheap, OptimalizationStressTest){
+    int product_count = 20000000;
+    std::vector<Product> products;
+    products.reserve(product_count);
+
+    float currentPrice = 0.01;
+    for (int i = 0; i < product_count; ++i) {
+        products.push_back(Product{currentPrice});
+        currentPrice += 0.05;
+    }
+    auto const numCheapest = 5;
+    std::vector<Product> expected;
+    expected.reserve(numCheapest);
+    std::copy(std::begin(products), std::begin(products) + numCheapest, std::back_inserter(expected));
+    std::random_shuffle(products.begin(), products.end());
+
+    auto start = std::chrono::high_resolution_clock::now();
+
+    auto actual = find_cheapest(products, numCheapest);
+
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+
+    EXPECT_LT(duration, 1000) << "The operation took too long: " << duration << "ms";
 }
 
 TEST(Cheap, TestCornerCase)
